@@ -1,0 +1,37 @@
+#Install-Module sqlserver
+#Find value in all DB's
+
+$dataSource = “tpcrmv9-db”
+$CsvData = @()
+
+
+$database = “MSCRM_CONFIG”
+#$connectionString = “Server=$dataSource;Database=$database;Integrated Security=True;”
+$DBs_query = “select [DatabaseName] from MSCRM_CONFIG.dbo.Organization where State = 1”
+$DBs = Invoke-Sqlcmd -Query $DBs_query -ServerInstance $dataSource
+
+
+$query = "
+
+select lv_name as name
+from lv_securityrolepermissions
+where lv_hidephonesforaccount=1
+
+
+"
+
+$CsvData+="DatabaseName;" + "name"
+
+foreach ($DB in $DBs) {
+
+    $DB_fields_query1 = "USE " + $DB.DatabaseName + " " + $query
+        
+    $results = Invoke-Sqlcmd -Query $DB_fields_query1 -ServerInstance $dataSource -ErrorAction SilentlyContinue 
+    
+        
+     foreach($result in $results){
+     $DB.DatabaseName  + ";" + $result.name 
+     $CsvData+=$DB.DatabaseName  + ";" + $result.name
+     }
+  }
+  $CsvData | Out-File "C:\Temp\SecurityRolePer_WithHidePhone_V9_$(get-date -f dd-MM-yyyy_hh_mm_ss).csv"
