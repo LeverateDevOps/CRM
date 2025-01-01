@@ -1,0 +1,84 @@
+param (
+    [string]$serverListFilePath = "C:\LeverateCRM\CrmV9Servers.txt",
+    [int]$maxAgeInDays = 3,
+    [string]$TargetDrive = "\\leveratecrm.file.core.windows.net\services-logs",
+    [int]$batchSize = 50,
+    [string]$ZipperMANPath = "C:\LeverateCRM\Scripts\zipperMAN\7za.exe"
+)
+
+# Set alias for 7-Zip
+Set-Alias sz $ZipperMANPath
+
+# Define a custom logging function
+function Write-Log {
+    param (
+        [Parameter(Mandatory=$true)][string]$Message,
+        [Parameter(Mandatory=$true)][string]$Path,
+        [Parameter(Mandatory=$true)][string]$Level,
+        [Parameter(Mandatory=$true)][string]$Server
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "$timestamp [$Level] [$Server] - $Message"
+    Add-Content -Path $Path -Value $logMessage
+}
+
+# Initialize log file
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+$logFilePath = "C:\Leverate\Powershell-Logs\log-$timestamp.txt"
+Add-Content -Path $logFilePath -Value "Log file created at $(Get-Date)"
+
+# Read server list from file
+$servers = Get-Content $serverListFilePath
+
+foreach ($server in $servers) {
+    Write-Log -Message "Processing server" -Path $logFilePath -Level "INFO" -Server $server
+    
+    $hostname = $server
+    $traceFolderPathV9 = "\\" + $server + "\C$\Program Files\Dynamics 365\Trace"
+    $sitefolderPath = "\\" + $server + "\C$\inetpub\logs\LogFiles\W3SVC2\"
+    $destFolderTrace = Join-Path -Path $TargetDrive -ChildPath "$hostname\Trace"
+    $destFolderSite = Join-Path -Path $TargetDrive -ChildPath "$hostname\SiteLogs"
+
+    # Create destination folders if not exist
+    foreach ($destFolder in @($destFolderTrace, $destFolderSite)) {
+        if (!(Test-Path -Path $destFolder)) {
+            New-Item -ItemType Directory -Path $destFolder | Out-Null
+            Write-Log -Message "Created directory $destFolder" -Path $logFilePath -Level "INFO" -Server $server
+        }
+    }
+
+    # Process files for both Trace and SiteLogs
+    foreach ($folderPath in @($traceFolderPathV9, $sitefolderPath)) {
+        $currentDestFolder = if ($folderPath -eq $traceFolderPathV9) { $destFolderTrace } else { $destFolderSite }
+        
+        $filesToProcess = Get-ChildItem -Path $folderPath -File | Where-Object {
+            $_.LastWriteTime -lt (Get-Date).AddDays(-$maxAgeInDays)
+        }
+        $batchCount = [Math]::Ceiling($filesToProcess.Count / $batchSize)
+        $batches = 0..($batchCount - 1)
+
+        foreach ($batch in $batches) {
+            $startIndex = $batch * $batchSize
+            $currentBatch = $filesToProcess[$startIndex..($startIndex + $batchSize - 1)]
+
+            if ($currentBatch.Count -gt 0) {
+                $zipFileName = Join-Path -Path $currentDestFolder -ChildPath ("$timestamp-$batch" + ".zip")
+                try {
+                    Compress-Archive -Path $currentBatch.FullName -DestinationPath $zipFileName -ErrorAction Stop
+                    Move-Item -Path $zipFileName -Destination $currentDestFolder -Force
+                    $currentBatch | Remove-Item -ErrorAction Continue
+                    Write-Log -Message "Successfully processed batch $batch from $folderPath" -Path $logFilePath -Level "INFO" -Server $server
+                } catch {
+                    Write-Log -Message "Failed to process batch $batch from $folderPath. Error: $($_.Exception.Message)" + $zipFileName -Path $logFilePath -Level "ERROR" -Server $server
+                }
+            } else {
+                Write-Log -Message "No files in current batch $batch from $folderPath" -Path $logFilePath -Level "WARNING" -Server $server
+            }
+        }
+    }
+
+    $hostname = null
+    $server = null
+}
+
+Write-Log -Message "Script processing completed" -Path $logFilePath -Level "INFO" -Server "N/A"
