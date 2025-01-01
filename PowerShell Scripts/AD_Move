@@ -1,0 +1,38 @@
+param(
+    [string]$serverName,
+    [string]$ouName,
+    [string]$ouPath,
+    [string]$targetOuPath
+)
+
+# Import the ActiveDirectory module
+Import-Module ActiveDirectory
+
+# Construct the distinguished name for the new OU
+$newOUDN = "OU=$ouName,$ouPath"
+$targetOUDN = "OU=$ouName,$targetOuPath"
+
+try {
+    # Check if the OU already exists on the specified AD server
+    $ouExists = Get-ADOrganizationalUnit -Server $serverName -Filter "DistinguishedName -eq '$newOUDN'" -ErrorAction SilentlyContinue
+
+    if ($ouExists -ne $null) {
+        Write-Output "The OU $ouName exists, starting move."
+        
+        # Disable protection from accidental deletion
+        Set-ADOrganizationalUnit -Identity $newOUDN -ProtectedFromAccidentalDeletion $false -Server $serverName
+
+        # Move the OU to the new path
+        Move-ADObject -Identity $newOUDN -TargetPath $targetOuPath -Server $serverName
+        
+        # Enable protection from accidental deletion at the new location
+        Set-ADOrganizationalUnit -Identity $targetOUDN -ProtectedFromAccidentalDeletion $true -Server $serverName
+        
+        Write-Output "The OU $ouName has been moved to $targetOuPath."
+    } else {
+        Write-Output "The OU $ouName doesn't exist."
+    }
+}
+catch {
+    Write-Output "An error occurred: $_"
+}
