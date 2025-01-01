@@ -1,0 +1,28 @@
+param (
+    [string]$Server
+)
+
+$Username = $env:USERNAME
+$Password = $env:PASSWORD
+
+# Define the credentials
+$credentials = New-Object System.Management.Automation.PSCredential($Username, (ConvertTo-SecureString $Password -AsPlainText -Force))
+
+# Stop IIS service
+Invoke-Command -ComputerName $Server -ScriptBlock {
+    cmd /c "iisreset /stop"
+} -Credential $credentials
+
+# Get current service status after stopping
+$status = Invoke-Command -ComputerName $Server -ScriptBlock {
+    Get-Service -Name W3SVC | Select-Object -ExpandProperty Status
+} -Credential $credentials
+
+Write-Host "Current IIS service status after stop: $status"
+
+# Start IIS service
+Invoke-Command -ComputerName $Server -ScriptBlock {
+    cmd /c "iisreset /start"
+} -Credential $credentials
+
+Write-Host "IIS has been successfully restarted on the server $Server."
