@@ -1,0 +1,88 @@
+	upstream crmv9-app-serverstest {
+	least_conn;  # Enable least connections load balancing
+	#server Tpcrmv9app4:443 max_fails=3 fail_timeout=30s;
+	server Escrmv9app4:443 max_fails=3 fail_timeout=30s;
+	}
+
+	upstream crmv9-appaxdresource-servers {
+	server tpcrmV9-app3:443;
+	}
+	upstream crmv9-authv9-servers {
+	least_conn;  # Enable least connections load balancing
+	server escrmV9-app1:443 max_fails=3 fail_timeout=30s;
+	server tpcrmV9-app1:443 max_fails=3 fail_timeout=30s;
+	server escrmV9-app2:443 max_fails=3 fail_timeout=30s;
+	server tpcrmV9-app2:443 max_fails=3 fail_timeout=30s;
+	server escrmV9-app3:443 max_fails=3 fail_timeout=30s;
+	server tpcrmV9-app3:443 max_fails=3 fail_timeout=30s;
+	#server Tpcrmv9app4:443 max_fails=3 fail_timeout=30s;
+	server Escrmv9app4:443 max_fails=3 fail_timeout=30s;
+	}
+
+
+	upstream crmv9-app-servers {
+	least_conn;  # Enable least connections load balancing
+	server escrmV9-app1:443 max_fails=3 fail_timeout=30s;
+	server tpcrmV9-app1:443 max_fails=3 fail_timeout=30s;
+	server escrmV9-app2:443 max_fails=3 fail_timeout=30s;
+	server tpcrmV9-app2:443 max_fails=3 fail_timeout=30s;
+	server escrmv9-app5:443 max_fails=3 fail_timeout=30s;
+
+	}
+
+	upstream crmv9-app-servers-xrmservices {
+	least_conn;  # Enable least connections load balancing
+	server escrmV9-app3:443 max_fails=3 fail_timeout=30s;
+	server tpcrmV9-app3:443 max_fails=3 fail_timeout=30s;
+	#server Tpcrmv9app4:443 max_fails=3 fail_timeout=30s;
+	server Escrmv9app4:443 max_fails=3 fail_timeout=30s;
+
+	}
+
+	upstream crmv9-app-servers-xrmservices-propinvesting {
+	least_conn;  # Enable least connections load balancing
+	server Tpcrmv9app4:443 max_fails=3 fail_timeout=30s;
+	}
+
+
+
+	upstream crmv9-cp-servers {
+	#server tpcrmV9-web:5566;
+	server TpCRMV9-WebCP:5566;
+	}
+
+	upstream crmv9-cp-serversnew {
+	#server escrm365-web:5566;
+	server TpCRMV9-WebCP:5566;
+	}
+
+	upstream crmv9-soap-servers {
+	server tpcrmV9-sdk:7086;
+	server escrmV9-sdk:7086;
+	}
+
+	upstream crmv9-soapmex-servers {
+	server tpcrmV9-sdk:7085;
+	server escrmV9-sdk:7085;
+	}
+
+	upstream crmv9-webalt-servers {
+	least_conn;
+	server tpcrmV9-web:1714 max_fails=3 fail_timeout=30s;
+	server tpcrmV9-web2:1714 max_fails=3 fail_timeout=30s;
+	server escrmV9-web:1714 max_fails=3 fail_timeout=30s;
+	}
+
+	upstream crmv9-web-servers {
+	least_conn;
+	server tpcrmV9-web:1714 max_fails=3 fail_timeout=30s;
+	server tpcrmV9-web2:1714 max_fails=3 fail_timeout=30s;
+	server escrmV9-web:1714 max_fails=3 fail_timeout=30s;
+	}
+	upstream crmv9-webex-servers {
+	least_conn;
+	server tpcrmV9-web:8443 max_fails=3 fail_timeout=30s;
+	server tpcrmV9-web2:8443 max_fails=3 fail_timeout=30s;
+	server escrmV9-web:8443 max_fails=3 fail_timeout=30s;
+	}
+

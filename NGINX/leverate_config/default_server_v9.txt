@@ -1,0 +1,39 @@
+location = /FederationMetadata/2007-06/FederationMetadata.xml {
+	include /mnt/nginxsmb/leverate_config/LeverateServers.txt;
+	deny all;
+	proxy_read_timeout 3600;
+	proxy_pass 	https://crmv9-app-servers;
+}
+
+deny  all;
+
+	error_page 403 /custom_403.html;
+	location = /custom_403.html {
+		root /etc/nginx/html;
+		allow all;
+    	}
+	location ~* ^/(WebResource.axd|ScriptResource.axd|webresource.axd|scriptresource.axd|crmreports|CRMReports|Reserved.ReportViewerWebControl.axd|reserved.reportviewerwebcontrol.axd) {
+		proxy_read_timeout 3600;
+		proxy_pass 	https://crmv9-appaxdresource-servers;
+	}
+	location ~* ^/(signalr|custompages) {
+		proxy_pass https://crmv9-cp-servers;
+		proxy_http_version 1.1;
+		proxy_set_header Upgrade $http_upgrade;
+		proxy_set_header Connection "upgrade";
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_read_timeout 3600;
+	}
+	location ~* ^/(XRMServices|xrmservices) {
+		proxy_pass https://crmv9-app-servers-xrmservices;
+		proxy_read_timeout 3600;
+	}
+
+
+	location / {
+		proxy_read_timeout 3600;
+		proxy_pass 	https://crmv9-app-servers;
+	}

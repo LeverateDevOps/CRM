@@ -1,0 +1,71 @@
+
+#CRM http
+http {
+	include       mime.types;
+	default_type  application/octet-stream;
+	sendfile        on;
+	ssl_protocols SSLv3 TLSv1 TLSv1.1 TLSv1.2  TLSv1.3;
+	keepalive_timeout  120;
+	server_names_hash_max_size 1024;
+	server_names_hash_bucket_size 128;
+	include /mnt/nginxsmb/leverate_config/upstreams_v8.txt;
+	#block all 
+	server {
+		add_header Allow "GET, POST, HEAD" always; 
+		if ( $request_method !~ ^(GET|POST|HEAD)$ ) { 
+		   return 405; 
+		}
+    		#listen 80 default_server;
+    		listen 446 ssl default_server;
+		listen 443 ssl default_server;
+    		return 444;
+		}
+	#status block
+	server {
+		location /nginx_status {
+          		stub_status on;
+          		access_log   off;
+          		include /mnt/nginxsmb/leverate_config/LeverateServers.txt;
+			allow 127.0.0.1;
+          		deny all;
+        	}
+	}
+	#Leverate Crm Orgs Includes
+
+	include /mnt/nginxsmb/v8_crm/*/*.conf;
+
+	#
+	#Main CRM Config
+	deny  all;
+	client_body_buffer_size 30K;
+	client_header_buffer_size 20k;
+	large_client_header_buffers 8 8k;
+	client_max_body_size 30M;
+	proxy_set_header        Host              $http_host;
+	proxy_set_header X-Real-IP $remote_addr;
+	
+	ssl_session_cache    shared:SSL:1m;
+	ssl_ciphers  HIGH:!aNULL:!MD5;
+	
+	ssl_certificate 	/etc/nginx/certs/tradingcrmpublic2024-chained.crt;
+	ssl_certificate_key	/etc/nginx/certs/tradingcrm2024.pem;
+	ssl_certificate_key /etc/nginx/certs/tradingcrm2024-priv.key;
+	ssl_prefer_server_ciphers  on;
+	
+	#Log Config
+	log_format mainold '$remote_addr -  $remote_user [$time_local] - "$upstream_addr" - $status - rt=$request_time - "$request" '
+                '$body_bytes_sent "$http_referer" '
+                '"$http_user_agent" ';
+
+	log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                '$status $body_bytes_sent "$http_referer" '
+                '"$http_user_agent" "$http_x_forwarded_for" '
+                '$upstream_response_time $upstream_addr';
+
+
+	access_log      /nginxlogs/crmv8-access.log main;
+	error_log       /nginxlogs/crmv8-error.log;
+	#End Main CRM Config
+	#
+
+}
