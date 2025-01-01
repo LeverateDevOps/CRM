@@ -1,0 +1,12 @@
+# Define the path of the main folder
+$mainFolderPath = "B:\"
+
+# Get all subfolders in the main folder
+$subFolders = Get-ChildItem -Path $mainFolderPath -Directory
+
+# Iterate through each subfolder and calculate its size
+foreach ($folder in $subFolders) {
+    $folderSize = (Get-ChildItem -Path $folder.FullName -Recurse -File | Measure-Object -Property Length -Sum).Sum
+    $folderSizeMB = [math]::Round($folderSize / 1MB, 2)
+    Write-Host "$($folder.Name) size: $folderSizeMB MB"
+}
