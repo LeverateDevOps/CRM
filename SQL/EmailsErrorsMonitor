@@ -1,0 +1,38 @@
+$dataSource = “172.28.0.153”
+$database = “MSCRM_CONFIG”
+$connectionString = “Server=$dataSource;Database=$database;Integrated Security=True;”
+$DBs_query = “select [DatabaseName] from MSCRM_CONFIG.dbo.Organization where State = 1”
+$DBs = Invoke-Sqlcmd -Query $DBs_query -ServerInstance $dataSource
+
+$query1 = "SELECT TOP 1 tlb.CreatedOn,tl.ErrorDetails,tl.RegardingObjectIdName
+  FROM [dbo].[TraceLogBase] tlb
+  inner join dbo.TraceLog tl on tl.TraceLogId=tlb.TraceLogId
+  WHERE tlb.Level=3
+  order by tlb.CreatedOn desc"
+
+$time = get-date
+
+try {
+    $logFileExists = Get-EventLog -list | Where-Object { $_.logdisplayname -eq "EmailsErrors" } 
+    if (! $logFileExists) {
+        New-EventLog -LogName "EmailsErrors" -Source "EmailsErrorsScript"
+    }
+}
+catch {
+    Write-EventLog -LogName EmailsErrors -EventId 110 -Source EmailsErrorsScript -EntryType Error -Message "There was an issue creating the Watch log"
+} 
+
+foreach ($DB in $DBs) {
+    $DB_fields_query1 = "USE " + $DB.DatabaseName + " " + $query1
+    $result = Invoke-Sqlcmd -Query $DB_fields_query1 -ServerInstance $dataSource -ErrorAction SilentlyContinue
+    foreach ($row in $result) {
+            
+            $message = $DB.DatabaseName + " ErrorDetails: " + $row.ErrorDetails + " Email: " + $row.RegardingObjectIdName
+            try {
+                Write-EventLog -LogName EmailsErrors -EventId 111 -Source EmailsErrorsScript -EntryType Warning -Message $message
+            }
+            catch {
+                Write-EventLog -LogName EmailsErrors -EventId 115 -Source EmailsErrorsScript -EntryType Error -Message "There was a problem writing to the event log"
+            }
+    }
+}
