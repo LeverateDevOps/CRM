@@ -1,0 +1,67 @@
+$Logfile = "C:\Leverate\ScriptLogs\WorkflowsMonitoring.log"
+Function LogWrite
+{
+   Param ([string]$logstring)
+   $date = Get-Date
+   $message = [string]$date + " - " + $logstring
+   Add-content $Logfile -value $message
+}
+
+$dataSource = “TPCRMV9-DB”
+$database = “MSCRM_CONFIG”
+$connectionString = “Server=$dataSource;Database=$database;Integrated Security=True;”
+$DBs_query = “select [DatabaseName] from MSCRM_CONFIG.dbo.Organization where State = 1 ”
+$DBs = Invoke-Sqlcmd -Query $DBs_query -ServerInstance $dataSource
+
+
+$QUERY2 = "select COUNT(*)
+from AsyncOperationBase NOLOCK
+where StatusCode in (0)"
+#State		Status					NumericStatusValuealue
+#Ready		WaitingForResources		0
+#Suspended	Waiting					10
+#Locked		InProgress				20
+#Locked		Pausing					21
+#Locked		Canceling				22
+#Completed	Succeeded				30
+#Completed	Failed					31
+#Completed	Canceled				32
+
+$total = 0;
+$message = ""
+#cls
+$time = get-date
+write-host "the time is $($time)"
+New-EventLog –LogName CRMMonitoring –Source "CRM Workflows” -Erroraction Ignore
+foreach ($DB in $DBs) {
+    $DB_fields_query1 = "USE " + $DB.DatabaseName + " " + $query2
+    
+    $result = Invoke-Sqlcmd -Query $DB_fields_query1 -ServerInstance $dataSource -ErrorAction SilentlyContinue
+    $count_per_org=$result.Column1
+    #if ($result.Column1>"9/24/2019") {write-host $DB.DatabaseName - $result.Column1}#
+    if ($count_per_org -gt 1) {
+        $message = $message + $DB.DatabaseName + " - " + $count_per_org + "`n"
+        #write-host $DB.DatabaseName - $result.Column1
+        $total = $total + $count_per_org
+    }
+    #$Count = (Invoke-Sqlcmd -Query $DB_fields_query1 -ServerInstance $dataSource -ErrorAction SilentlyContinue).Column1
+    if ($count_per_org -gt 10)
+    {
+        Write-Host $DB.DatabaseName - $count_per_org
+    
+    }
+}
+if ($total -gt 1000)
+{
+    $message = "Total - " + $total + " workflows waiting for resources in all orginizations" + "`n" + $message
+    LogWrite -logstring $message 
+    Write-EventLog –LogName CRMMonitoring –Source "CRM Workflows” –EntryType Error –EventID 1  –Message $message
+}
+else
+{
+    $message = "Everything is good Total - " + $total + " workflows waiting for resources in all orginizations" + "`n" + $message
+    LogWrite -logstring $message 
+}
+
+Write-Host "Total - " $total
+
