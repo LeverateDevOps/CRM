@@ -1,0 +1,42 @@
+param(
+    [string]$serverName,
+    [string]$dnsZone,
+    [string]$dnsName
+)
+
+# Import DNS Server module if not already loaded
+if (-not (Get-Module -ListAvailable -Name DNSServer)) {
+    Import-Module DNSServer
+}
+
+# Construct the fully qualified domain name (FQDN) from the DNS name and zone
+$dnsFqdn = "$dnsName.$dnsZone"
+
+try {
+    # Check if the DNS record already exists on the specified server
+    $existingRecord = Get-DnsServerResourceRecord -ComputerName $serverName -ZoneName $dnsZone -Name $dnsName -ErrorAction Stop    
+    
+    if ($existingRecord -ne $null){
+        Write-Host "A DNS record for $dnsFqdn exists on server $serverName."
+
+        try {
+            Remove-DnsServerResourceRecord -ComputerName $serverName -Name $dnsName -ZoneName $dnsZone -RRType 'CNAME' -Force
+
+            Write-Host "Successfully removed record for $dnsFqdn on server $serverName."
+        }
+        catch {
+            Write-Error "Failed to remove DNS record on server ${serverName}: ${_}"
+            exit 2 # Exit with a specific error code indicating failure to remove the record
+        }
+    }
+    else {
+        Write-Output "The DNS record $dnsName doesn't exist."
+    }
+
+}
+catch {
+    Write-Host "An error occurred: ${_}"
+    return
+}
+
+
