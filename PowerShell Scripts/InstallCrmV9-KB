@@ -1,0 +1,61 @@
+Add-Type -AssemblyName System.Windows.Forms
+
+# Define variables
+$kbInstallerPath = "C:\Install\CRM9.1-Server-KB5026501-ENU-amd64.exe"  # KB installer path
+$installerTitle = "Dynamics 365 Update 1.18"                                          # Window title or part of it
+
+# Launch the installer
+Write-Host "Starting the KB update installer..."
+$process = Start-Process -FilePath $kbInstallerPath -PassThru -WindowStyle Normal
+
+Start-Sleep -Seconds 5  # Wait for the installer window to appear
+
+# Bring the installer window to the foreground
+$wshell = New-Object -ComObject WScript.Shell
+$success = $false
+
+
+# Retry focusing on the window a few times
+for ($i = 0; $i -lt 5; $i++) {
+    if ($wshell.AppActivate($installerTitle)) {
+        Write-Host "Installer window activated."
+        $success = $true
+        break
+    }
+    Start-Sleep -Seconds 2
+}
+
+if (-not $success) {
+    Write-Error "Unable to activate the installer window. Exiting."
+    exit 1
+}
+
+# Automate the installer steps
+Write-Host "Sending keystrokes to proceed with installation..."
+try {
+    # Step 1: Press Enter to click 'Next'
+    Start-Sleep -Seconds 5
+    $wshell.SendKeys("~")          # Press Enter (Next)
+    Start-Sleep -Seconds 5         # Wait for the license agreement screen to load
+
+    # Step 2: Navigate to the "I accept" radio button
+    $wshell.SendKeys("{TAB}")      # Navigate to the first radio button
+    Start-Sleep -Seconds 1
+    # Step 2: Navigate to the "I accept" radio button
+    $wshell.SendKeys("{TAB}")      # Navigate to the first radio button
+    Start-Sleep -Seconds 1
+    $wshell.SendKeys("{UP}")     # Move focus to "I accept this license agreement"
+    Start-Sleep -Seconds 1
+    $wshell.SendKeys("~")          # Press Space to select "I accept"
+
+    # Step 3: Press Enter to proceed with 'Next'
+    Start-Sleep -Seconds 2
+    $wshell.SendKeys("~")          # Press Enter (Next)
+
+    #Start-Sleep -Seconds 10        # Allow time for installation to progress
+    #$wshell.SendKeys("~")          # Press Enter for 'Finish' if applicable
+
+    Write-Host "KB update installation completed successfully."
+} catch {
+    Write-Error "Automation failed: $_"
+}
