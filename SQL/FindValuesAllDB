@@ -1,0 +1,43 @@
+#Install-Module sqlserver
+#Find value in all DB's
+
+$dataSource = “tpcrm365-db”
+$CsvData = @()
+
+
+$database = “MSCRM_CONFIG”
+#$connectionString = “Server=$dataSource;Database=$database;Integrated Security=True;”
+$DBs_query = “select [DatabaseName] from MSCRM_CONFIG.dbo.Organization where State = 1”
+$DBs = Invoke-Sqlcmd -Query $DBs_query -ServerInstance $dataSource
+
+
+$query = @"
+
+
+select count(*) as Counter
+
+
+from SystemUserBase
+where IsDisabled=0
+
+
+"@
+
+$CsvData+="DatabaseName;" + "Counter"
+
+foreach ($DB in $DBs) {
+
+    $DB_fields_query1 = "USE " + $DB.DatabaseName + " " + $query
+        
+    $results = Invoke-Sqlcmd -Query $DB_fields_query1 -ServerInstance $dataSource -ErrorAction SilentlyContinue 
+    
+        
+     foreach($result in $results){
+     if($result.Counter -gt 0){
+     $DB.DatabaseName  + ";" + $result.Counter
+
+     $CsvData+=$DB.DatabaseName  + ";" + $result.Counter
+     }
+     }
+  }
+  $CsvData | Out-File "C:\Temp\EnabledUsersV9_$(get-date -f dd-MM-yyyy_hh_mm_ss).csv"
