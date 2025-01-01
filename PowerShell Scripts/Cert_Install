@@ -1,0 +1,88 @@
+param(
+    [Parameter(Mandatory=$true)]
+    [string]$certName,
+
+    [Parameter(Mandatory=$true)]
+    [string]$certType,
+
+    [Parameter(Mandatory=$true)]
+    [string]$computerName
+)
+
+function ConvertTo-Base64String {
+    param(
+        [string]$filePath
+    )
+
+    $fileBytes = Get-Content -Path $filePath -Encoding Byte
+    $base64CertData = [Convert]::ToBase64String($fileBytes)
+    return $base64CertData
+}
+
+function Install-CertificateRemotely {
+    param(
+        [string]$certType,
+        [string]$certName,
+        [string]$base64CertData,
+        [string]$computerName,
+        [string]$username,
+        [string]$password
+    )
+
+    $credential = $null
+    if ($username -and $password) {
+        $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+        $credential = New-Object System.Management.Automation.PSCredential($username, $securePassword)
+    }
+
+    $scriptBlock = {
+        param($certType, $base64CertData, $certName)
+
+        $certStore = if ($certType -eq "pfx") { "My" } elseif ($certType -eq "cer") { "TrustedPeople" } else { throw "Unsupported certType '$certType'" }
+        $certStoreLocation = "LocalMachine"
+
+        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store($certStore, $certStoreLocation)
+        $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+
+        # Use FindBySubjectName and match against the certificate's subject name
+        $existingCert = $store.Certificates.Find([System.Security.Cryptography.X509Certificates.X509FindType]::FindBySubjectName, $certName, $false)
+
+        if ($existingCert.Count -gt 0) {
+            foreach ($cert in $existingCert) {
+                $store.Remove($cert)
+                Write-Host "Certificate '$certName' has been removed and will be re-installed"
+            }        
+        }
+
+        $certBytes = [Convert]::FromBase64String($base64CertData)
+
+        # Define different flags for PFX and CER to ensure private keys are handled properly for PFX
+         $flags = if ($certType -eq "pfx") {
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::PersistKeySet -bor
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::MachineKeySet -bor
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+        } else {
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::DefaultKeySet
+        }
+
+        $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2
+        $cert.Import($certBytes, $null, $flags)
+
+        $store.Add($cert)
+        
+        $store.Close()
+
+        Write-Host "Certificate '$certName' installed successfully."
+    }
+
+    if ($credential) {
+        Invoke-Command -ErrorAction Stop -ComputerName $computerName -ScriptBlock $scriptBlock -ArgumentList $certType, $base64CertData, $certName -Credential $credential
+    } else {
+        Invoke-Command -ErrorAction Stop -ComputerName $computerName -ScriptBlock $scriptBlock -ArgumentList $certType, $base64CertData, $certName
+    }
+}
+
+$filePath = "$certName.$certType"
+$base64CertData = ConvertTo-Base64String -filePath $filePath
+
+Install-CertificateRemotely -certType $certType -certName $certName -base64CertData $base64CertData -computerName $computerName -username $env:USERNAME -password $env:PASSWORD
