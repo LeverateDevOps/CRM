@@ -1,0 +1,17 @@
+$dataSource = “ESCRM365-DB”
+$database = “MSCRM_CONFIG”
+$connectionString = “Server=$dataSource;Database=$database;Integrated Security=True;”
+$DBs_query = “select [DatabaseName] from MSCRM_CONFIG.dbo.Organization where State = 1”
+$DBs = Invoke-Sqlcmd -Query $DBs_query -ServerInstance $dataSource
+
+
+$query = "
+EXEC [dbo].[usp_TempSetTPAccountAggrFields]
+
+"
+
+foreach ($DB in $DBs) {
+    $DB_fields_query1 = "USE " + $DB.DatabaseName + " " + $query
+    $result = Invoke-Sqlcmd -Query $DB_fields_query1 -ServerInstance $dataSource -ErrorAction SilentlyContinue
+
+  }
