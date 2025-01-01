@@ -1,0 +1,40 @@
+param(
+    [string]$orgName,
+    [string]$CAname,
+    [string]$CAfilesPath, # Path to the CA files
+    [string]$expirationDate
+)
+
+# Function to search for a file in directories ending with \x64
+function Find-Executable($fileName) {
+    $paths = Get-ChildItem "C:\Program Files (x86)\Windows Kits\" -Filter $fileName -Recurse | Where-Object { $_.DirectoryName -match '\\x64$' }
+    if ($paths -and $paths.Count -gt 0) {
+        return $paths[0].FullName
+    } else {
+        throw "File $fileName not found in expected directories."
+    }
+}
+
+# Locate makecert.exe and pvk2pfx.exe
+$makecertPath = Find-Executable -fileName "makecert.exe"
+$pvk2pfxPath = Find-Executable -fileName "pvk2pfx.exe"
+
+# Generate private key while redirecting stderr to null
+& openssl genpkey -out "$orgName.$CAname.pem" -outform PEM -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -quiet
+
+# Convert PEM to PVK while redirecting stderr to null
+& openssl rsa -inform PEM -outform PVK -in "$orgName.$CAname.pem" -out "$orgName.$CAname.pvk" -pvk-none 2>$null
+
+# Construct CA file paths
+$CApvkPath = Join-Path $CAfilesPath "$CAname.pvk"
+$CAcerPath = Join-Path $CAfilesPath "$CAname.cer"
+
+# Execute the makecert command
+& $makecertPath -sv "$orgName.$CAname.pvk" -iv $CApvkPath -n "CN=$orgName.$CAname" -ic $CAcerPath -a sha1 -sky exchange -pe -e $expirationDate "$orgName.$CAname.cer"
+
+# Convert to PFX
+$outputPfx = "$orgName.$CAname.pfx"
+if (Test-Path "$outputPfx") {
+    Remove-Item "$outputPfx" -Force
+}
+& $pvk2pfxPath -pvk "$orgName.$CAname.pvk" -spc "$orgName.$CAname.cer" -pfx "$outputPfx"
