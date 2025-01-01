@@ -1,0 +1,34 @@
+$dataSource = “172.28.0.153”
+$database = “MSCRM_CONFIG”
+$connectionString = “Server=$dataSource;Database=$database;Integrated Security=True;”
+$DBs_query = “select [DatabaseName] from MSCRM_CONFIG.dbo.Organization where State = 1”
+$DBs = Invoke-Sqlcmd -Query $DBs_query -ServerInstance $dataSource
+
+$query1 = "select count(1) PendingSend FROM [dbo].[ActivityPointerBase] where ActivityTypeCode = 4202 and StateCode = 1 and StatusCode = 6"
+
+$time = get-date
+
+try {
+    $logFileExists = Get-EventLog -list | Where-Object { $_.logdisplayname -eq "PendingSendWatch" } 
+    if (! $logFileExists) {
+        New-EventLog -LogName "PendingSendWatch" -Source "PendingWatchScript"
+    }
+}
+catch {
+    Write-EventLog -LogName PendingSendWatch -EventId 110 -Source PendingWatchScript -EntryType Error -Message "There was an issue creating the Watch log"
+} 
+
+foreach ($DB in $DBs) {
+    $DB_fields_query1 = "USE " + $DB.DatabaseName + " " + $query1
+    $result = Invoke-Sqlcmd -Query $DB_fields_query1 -ServerInstance $dataSource -ErrorAction SilentlyContinue
+    foreach ($row in $result) {
+        if ($row.PendingSend -gt '20') {
+            try {
+                Write-EventLog -LogName PendingSendWatch -EventId 111 -Source PendingWatchScript -EntryType Warning -Message "CRM 365 PROD - $($DB.DatabaseName) currently has $($row.PendingSend) Pendings Send Emails"
+            }
+            catch {
+                Write-EventLog -LogName PendingSendWatch -EventId 115 -Source PendingWatchScript -EntryType Error -Message "There was a problem writing to the event log"
+            }
+        }
+    }
+}
