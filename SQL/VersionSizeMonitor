@@ -1,0 +1,135 @@
+# Define the credentials directly (not secure)
+$UserName = "tradingcrm\Administrator"
+$Password = "Lever8AITrade23!"
+$SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+$Credential = New-Object System.Management.Automation.PSCredential($UserName, $SecurePassword)
+
+# Define the path to the servers list
+$serversFile = "C:\Users\rdpadmin\Downloads\servers.txt"
+
+# Read server names from the file
+$servers = Get-Content -Path $serversFile
+
+# Define the path for the log file
+$Logfile = "C:\Leverate\Scripts log\VersionStoreMonitoring.log"
+
+# Define Event Log details
+$LogName = "VersionStoreMonitoring"
+$Source = "VersionStoreMonitoringSource"
+
+# Function to create event log source if it doesn't exist
+Function Ensure-EventLogSource {
+    if (-not [System.Diagnostics.EventLog]::SourceExists($Source)) {
+        [System.Diagnostics.EventLog]::CreateEventSource($Source, $LogName)
+    }
+}
+
+# Function to log messages
+Function LogWrite {
+    Param ([string]$logstring)
+    $date = Get-Date
+    $message = [string]$date + " - " + $logstring
+    Add-Content $Logfile -Value $message
+}
+
+# Function to write to Event Viewer
+Function Write-EventLogEntry {
+    Param (
+        [string]$message,
+        [int]$eventId
+    )
+    Write-EventLog -LogName $LogName -Source $Source -EntryType Information -EventId $eventId -Message $message
+}
+
+# Ensure the Event Log Source exists
+Ensure-EventLogSource
+
+# Define the version store size thresholds in bytes
+$versionStoreThreshold1 = 10GB
+$versionStoreThreshold2 = 20GB
+
+# SQL query to check the version store size
+$QUERY = @"
+SELECT 
+    SUM(version_store_reserved_kb) * 1024 AS VersionStoreSizeBytes
+FROM sys.dm_tran_version_store
+"@
+
+# Initialize a variable to accumulate messages
+$overallMessage = ""
+$overallDetails = ""
+$exceedsThreshold1 = $false
+$exceedsThreshold2 = $false
+
+# Loop through each server in the list
+foreach ($server in $servers) {
+    # Use Invoke-Command to run the query on the remote server
+    $results = Invoke-Command -ComputerName $server -Credential $Credential -ScriptBlock {
+        param ($QUERY, $server)
+
+        # Execute the query
+        $result = Invoke-Sqlcmd -Query $QUERY -ErrorAction SilentlyContinue
+
+        $details = ""
+        $exceedsThreshold1 = $false
+        $exceedsThreshold2 = $false
+        
+        if ($result) {
+            foreach ($row in $result) {
+                $versionStoreSizeBytes = $row.VersionStoreSizeBytes
+
+                if ($versionStoreSizeBytes > $using:versionStoreThreshold2) {
+                    $details += "Server: $server, Version Store Size: $versionStoreSizeBytes bytes`n"
+                    $exceedsThreshold2 = $true
+                } elseif ($versionStoreSizeBytes > $using:versionStoreThreshold1) {
+                    $details += "Server: $server, Version Store Size: $versionStoreSizeBytes bytes`n"
+                    $exceedsThreshold1 = $true
+                } else {
+                    $details += "Server: $server, Version Store Size: $versionStoreSizeBytes bytes`n"
+                }
+            }
+        }
+
+        if ($exceedsThreshold2) {
+            $message = "ALERT: Version store size exceeds 20GB on server $server.`n"
+            $message += $details
+        } elseif ($exceedsThreshold1) {
+            $message = "WARNING: Version store size exceeds 10GB on server $server.`n"
+            $message += $details
+        } else {
+            $message = "INFO: Version store size is within normal limits on server $server.`n"
+            $message += $details
+        }
+
+        [PSCustomObject]@{ Message = $message; Details = $details; ExceedsThreshold2 = $exceedsThreshold2; ExceedsThreshold1 = $exceedsThreshold1 }
+    } -ArgumentList $QUERY, $server
+
+    # Accumulate the results
+    foreach ($result in $results) {
+        LogWrite -logstring $result.Message
+        
+        if ($result.ExceedsThreshold2) {
+            $overallMessage += "ALERT: Version store size exceeds 20GB on server $server.`n"
+            $overallDetails += $result.Details
+            $exceedsThreshold2 = $true
+        } elseif ($result.ExceedsThreshold1) {
+            $overallMessage += "WARNING: Version store size exceeds 10GB on server $server.`n"
+            $overallDetails += $result.Details
+            $exceedsThreshold1 = $true
+        } else {
+            $overallMessage += "INFO: Version store size is within normal limits on server $server.`n"
+            $overallDetails += $result.Details
+        }
+    }
+}
+
+# Write a single event log entry with all details
+if ($exceedsThreshold2) {
+    Write-EventLogEntry -message ($overallMessage + "`nDetails:`n" + $overallDetails) -eventId 3
+} elseif ($exceedsThreshold1) {
+    Write-EventLogEntry -message ($overallMessage + "`nDetails:`n" + $overallDetails) -eventId 2
+} else {
+    Write-EventLogEntry -message ($overallMessage + "`nDetails:`n" + $overallDetails) -eventId 1
+}
+
+Write-Host "Version store size check completed."
