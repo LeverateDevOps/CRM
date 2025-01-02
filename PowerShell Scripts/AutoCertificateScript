@@ -1,0 +1,71 @@
+cd "C:\Leverate\Certificate script"
+if(!(Test-Path -Path ".\PSTools\PsExec.exe" -PathType Leaf))
+{
+    write-host "PsExec is not found, Download it from https://docs.microsoft.com/en-us/sysinternals/downloads/psexec"
+    exit(0)
+}
+cd "C:\Leverate\AutoOnboarding\Scripts"
+$location=get-location;
+$organizationsList = Get-Content .\OrgName.txt
+
+foreach ($org in $organizationsList)
+{
+      
+     try
+     {
+    $ValidityPeriod = 24
+    $ErrorActionPreference = 'Stop'
+    $OrgNameInLower = $org.ToLower()
+    cd "\\192.168.2.243\Certificates\2024\CRM\Prod"
+    mkdir $org
+    $prodcert="\\192.168.2.243\Certificates\2024\CRM\Prod\$org"
+    cd "\\192.168.2.243\Certificates\2024\CRM\Staging"
+    mkdir $org
+    $democert="\\192.168.2.243\Certificates\2024\CRM\Staging\$org"
+    # Path to create cert
+    #set-location $location
+    Set-Location -Path "C:\Leverate\Certificate script"
+    #Write-Verbose "$(get-date -Format {yyyy-MM-dd hh:mm:ss}): Old working directory $($oldPath)"
+    #Write-Verbose "$(get-date -Format {yyyy-MM-dd hh:mm:ss}): Current working directory $($PWD)"
+    $expireDate = '12/31/2040'
+    Write-Host "$(get-date -Format {yyyy-MM-dd hh:mm:ss}): Start creating certificates"
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c CreateSignedEndCertificate.bat $($OrgNameInLower).tradingcrm.com tradingcrm.com `"$expireDate`" > log\$($OrgNameInLower).log" -NoNewWindow -Wait
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c CreateSignedEndCertificate.bat $($OrgNameInLower).demo.api.leverate.com demo.api.leverate.com `"$expireDate`" >> log\$($OrgNameInLower).log" -NoNewWindow -Wait
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c CreateSignedEndCertificate.bat $($OrgNameInLower).prod.api.leverate.com prod.api.leverate.com `"$expireDate`" >> log\$($OrgNameInLower).log" -NoNewWindow -Wait
+    Write-Host "$(get-date -Format {yyyy-MM-dd hh:mm:ss}): Exit"
+    mkdir ".\CertsInstallers\$OrgNameInLower"
+    $OrgDirectoryForInstall =".\CertsInstallers\$OrgNameInLower" 
+
+    #ToOrgDirectoryforProdandSTG
+    Copy-Item -Path "$($OrgNameInLower).tradingcrm.com\Install-Private-$OrgNameInLower.tradingcrm.com.exe" -Destination $OrgDirectoryForInstall -Recurse
+    Copy-Item -Path "$($OrgNameInLower).tradingcrm.com\Install-Trusted-$OrgNameInLower.tradingcrm.com.exe" -Destination $OrgDirectoryForInstall -Recurse
+    Copy-Item -Path "$($OrgNameInLower).prod.api.leverate.com\Install-Private-$OrgNameInLower.prod.api.leverate.com.exe" -Destination $OrgDirectoryForInstall -Recurse
+    Copy-Item -Path "$($OrgNameInLower).demo.api.leverate.com\Install-Private-$OrgNameInLower.demo.api.leverate.com.exe" -Destination $OrgDirectoryForInstall -Recurse
+    Copy-Item -Path "$($OrgNameInLower).prod.api.leverate.com\Install-Trusted-$OrgNameInLower.prod.api.leverate.com.exe" -Destination $OrgDirectoryForInstall -Recurse
+    Copy-Item -Path "$($OrgNameInLower).demo.api.leverate.com\Install-Trusted-$OrgNameInLower.demo.api.leverate.com.exe" -Destination $OrgDirectoryForInstall -Recurse
+    Copy-Item -Path "$($OrgNameInLower).prod.api.leverate.com\$OrgNameInLower.prod.api.leverate.com.pfx" -Destination $OrgDirectoryForInstall -Recurse
+    Copy-Item -Path "$($OrgNameInLower).demo.api.leverate.com\$OrgNameInLower.demo.api.leverate.com.pfx" -Destination $OrgDirectoryForInstall -Recurse
+    Copy-Item -Path "$($OrgNameInLower).tradingcrm.com\Install-Private-$OrgNameInLower.tradingcrm.com.exe" -Destination "\\192.168.2.243\Integration\CRM\Deployment\Clients\$org" -Recurse
+    #Staging
+    #Start-Process -FilePath "cmd.exe" -ArgumentList "/c CreateSignedEndCertificate.bat $($OrgNameInLower).staging.crm.leverate.com staging.crm.leverate.com `"$expireDate`" >> log\$($OrgNameInLower).log" -NoNewWindow -Wait
+    #Copy-Item -Path "$($OrgNameInLower).staging.crm.leverate.com\Install-Trusted-$OrgNameInLower.staging.crm.leverate.com.exe" -Destination $OrgDirectoryForInstall -Recurse
+    #Copy-Item -Path "$($OrgNameInLower).staging.crm.leverate.com\Install-Private-$OrgNameInLower.staging.crm.leverate.com.exe" -Destination $OrgDirectoryForInstall -Recurse
+    #Copy-Item -Path "$($OrgNameInLower).staging.crm.leverate.com\Install-Private-$OrgNameInLower.staging.crm.leverate.com.exe" -Destination "\\192.168.2.243\Integration\CRM\Deployment\Clients\`\$org" -Recurse
+    #Copy-Item -Path "$($OrgNameInLower).staging.crm.leverate.com\" -Destination $democert -Recurse
+    #Copy-Item -Path "$($OrgNameInLower).demo.api.leverate.com\" -Destination $democert -Recurse
+
+    #cd $location
+    Copy-Item -Path "$($OrgNameInLower)`.tradingcrm.com\" -Destination $prodcert -Recurse
+    Copy-Item -Path "$($OrgNameInLower).prod.api.leverate.com\" -Destination $prodcert -Recurse
+    Copy-Item -Path "$($OrgNameInLower).demo.api.leverate.com\" -Destination $prodcert -Recurse
+
+    }
+     catch
+     {
+        Write-host -EntryType Error -Message "Caught exception:" -Exception $_.Exception
+     }
+     
+
+Copy-Item -Path ('C:\Leverate\Certificate script\CertsInstallers\'+$OrgNameInLower) -Destination "\\172.25.1.58\Certficates\2024\" -Recurse
+}
+
